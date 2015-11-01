@@ -18,28 +18,31 @@ var (
 func Minify(_ minify.Minifier, _ string, w io.Writer, r io.Reader) error {
 	l := js.NewLexer(r)
 	prev := js.LineTerminatorToken
-	prevLast := byte(' ')
+	prevLast := ' '
 	lineTerminatorQueued := false
 	whitespaceQueued := false
 	semicolonQueued := false
-
 	for {
 		tt, text, n := l.Next()
-		l.Free(n)
-		if tt == js.ErrorToken {
+		switch tt {
+		case js.ErrorToken:
 			if l.Err() != io.EOF {
 				return l.Err()
 			}
 			return nil
-		} else if tt == js.LineTerminatorToken {
+		case js.LineTerminatorToken:
 			lineTerminatorQueued = true
-		} else if tt == js.WhitespaceToken {
+		case js.WhitespaceToken:
 			whitespaceQueued = true
-		} else if tt == js.PunctuatorToken && text[0] == ';' {
-			prev = tt
-			prevLast = ';'
-			semicolonQueued = true
-		} else if tt != js.CommentToken {
+		case js.CommentToken:
+		default:
+			if tt == js.PunctuatorToken && text[0] == ';' {
+				prev = tt
+				prevLast = ';'
+				semicolonQueued = true
+				break
+			}
+
 			first := text[0]
 			if semicolonQueued && (tt != js.PunctuatorToken || first != '}') {
 				if _, err := w.Write(semicolonBytes); err != nil {
@@ -66,5 +69,6 @@ func Minify(_ minify.Minifier, _ string, w io.Writer, r io.Reader) error {
 			whitespaceQueued = false
 			semicolonQueued = false
 		}
+		l.Free(n)
 	}
 }
