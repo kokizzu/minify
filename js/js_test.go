@@ -34,6 +34,7 @@ func TestJS(t *testing.T) {
 		{"+\na", "+\na"},
 		{"+\n(", "+\n("},
 		{"+\n\"\"", "+\"\""},
+		{"for(var a=0;;){}", "for(var a=0;;){}"},
 		{"a + ++b", "a+ ++b"},                                          // JSMin caution
 		{"var a=/\\s?auto?\\s?/i\nvar", "var a=/\\s?auto?\\s?/i\nvar"}, // #14
 	}

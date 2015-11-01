@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	spaceBytes   = []byte(" ")
-	newlineBytes = []byte("\n")
+	spaceBytes     = []byte(" ")
+	newlineBytes   = []byte("\n")
+	semicolonBytes = []byte(";")
 )
 
 // Minify minifies JS data, it reads from r and writes to w.
@@ -20,6 +21,8 @@ func Minify(_ minify.Minifier, _ string, w io.Writer, r io.Reader) error {
 	prevLast := byte(' ')
 	lineTerminatorQueued := false
 	whitespaceQueued := false
+	semicolonQueued := false
+
 	for {
 		tt, text, n := l.Next()
 		l.Free(n)
@@ -32,8 +35,17 @@ func Minify(_ minify.Minifier, _ string, w io.Writer, r io.Reader) error {
 			lineTerminatorQueued = true
 		} else if tt == js.WhitespaceToken {
 			whitespaceQueued = true
+		} else if tt == js.PunctuatorToken && text[0] == ';' {
+			prev = tt
+			prevLast = ';'
+			semicolonQueued = true
 		} else if tt != js.CommentToken {
 			first := text[0]
+			if semicolonQueued && (tt != js.PunctuatorToken || first != '}') {
+				if _, err := w.Write(semicolonBytes); err != nil {
+					return err
+				}
+			}
 			if (prev == js.IdentifierToken || prev == js.NumericToken || prev == js.PunctuatorToken || prev == js.StringToken || prev == js.RegexpToken) && (tt == js.IdentifierToken || tt == js.NumericToken || tt == js.PunctuatorToken || tt == js.RegexpToken) {
 				if lineTerminatorQueued && (prev != js.PunctuatorToken || prevLast == '}' || prevLast == ']' || prevLast == ')' || prevLast == '+' || prevLast == '-' || prevLast == '"' || prevLast == '\'') && (tt != js.PunctuatorToken || first == '{' || first == '[' || first == '(' || first == '+' || first == '-') {
 					if _, err := w.Write(newlineBytes); err != nil {
@@ -52,6 +64,7 @@ func Minify(_ minify.Minifier, _ string, w io.Writer, r io.Reader) error {
 			prevLast = text[len(text)-1]
 			lineTerminatorQueued = false
 			whitespaceQueued = false
+			semicolonQueued = false
 		}
 	}
 }
