@@ -7,9 +7,9 @@ type Token struct {
 	html.TokenType
 	Hash    html.Hash
 	Data    []byte
+	Text    []byte
 	AttrVal []byte
 	Traits  traits
-	n       int
 }
 
 // TokenBuffer is a buffer that allows for token look-ahead.
@@ -18,6 +18,8 @@ type TokenBuffer struct {
 
 	buf []Token
 	pos int
+
+	prevN int
 }
 
 // NewTokenBuffer returns a new TokenBuffer.
@@ -29,14 +31,15 @@ func NewTokenBuffer(l *html.Lexer) *TokenBuffer {
 }
 
 func (z *TokenBuffer) read(t *Token) {
-	t.TokenType, t.Data, t.n = z.l.Next()
+	t.TokenType, t.Data = z.l.Next()
+	t.Text = z.l.Text()
 	if t.TokenType == html.AttributeToken {
 		t.AttrVal = z.l.AttrVal()
-		t.Hash = html.ToHash(t.Data)
+		t.Hash = html.ToHash(t.Text)
 		t.Traits = attrMap[t.Hash]
 	} else if t.TokenType == html.StartTagToken || t.TokenType == html.EndTagToken {
 		t.AttrVal = nil
-		t.Hash = html.ToHash(t.Data)
+		t.Hash = html.ToHash(t.Text)
 		t.Traits = tagMap[t.Hash]
 	} else {
 		t.AttrVal = nil
@@ -82,14 +85,15 @@ func (z *TokenBuffer) Peek(pos int) *Token {
 
 // Shift returns the first element and advances position.
 func (z *TokenBuffer) Shift() *Token {
+	z.l.Free(z.prevN)
 	if z.pos >= len(z.buf) {
 		t := &z.buf[:1][0]
 		z.read(t)
-		z.l.Free(t.n)
+		z.prevN = len(t.Data)
 		return t
 	}
 	t := &z.buf[z.pos]
-	z.l.Free(t.n)
 	z.pos++
+	z.prevN = len(t.Data)
 	return t
 }

@@ -14,61 +14,74 @@ var (
 	semicolonBytes = []byte(";")
 )
 
+////////////////////////////////////////////////////////////////
+
+// Minifier is a JS minifier.
+type Minifier struct{}
+
 // Minify minifies JS data, it reads from r and writes to w.
-func Minify(_ minify.Minifier, _ string, w io.Writer, r io.Reader) error {
-	l := js.NewLexer(r)
+func Minify(m *minify.M, w io.Writer, r io.Reader, params map[string]string) error {
+	return (&Minifier{}).Minify(m, w, r, params)
+}
+
+// Minify minifies JS data, it reads from r and writes to w.
+func (o *Minifier) Minify(_ *minify.M, w io.Writer, r io.Reader, _ map[string]string) error {
 	prev := js.LineTerminatorToken
-	prevLast := ' '
+	prevLast := byte(' ')
 	lineTerminatorQueued := false
 	whitespaceQueued := false
 	semicolonQueued := false
+
+	l := js.NewLexer(r)
 	for {
-		tt, text, n := l.Next()
-		switch tt {
-		case js.ErrorToken:
+		tt, data := l.Next()
+		if tt == js.ErrorToken {
 			if l.Err() != io.EOF {
 				return l.Err()
 			}
 			return nil
-		case js.LineTerminatorToken:
+		} else if tt == js.LineTerminatorToken {
 			lineTerminatorQueued = true
-		case js.WhitespaceToken:
+		} else if tt == js.WhitespaceToken {
 			whitespaceQueued = true
-		case js.CommentToken:
-		default:
-			if tt == js.PunctuatorToken && text[0] == ';' {
-				prev = tt
-				prevLast = ';'
+		} else if tt != js.CommentToken {
+			first := data[0]
+			if tt == js.PunctuatorToken && first == ';' {
+				if semicolonQueued {
+					// when two semicolons follow, print them (such as in `for (var i = 0;;)`)
+					if _, err := w.Write(data); err != nil {
+						return err
+					}
+				}
 				semicolonQueued = true
-				break
-			}
-
-			first := text[0]
-			if semicolonQueued && (tt != js.PunctuatorToken || first != '}') {
-				if _, err := w.Write(semicolonBytes); err != nil {
+			} else {
+				if semicolonQueued && (tt != js.PunctuatorToken || first != '}') {
+					if _, err := w.Write(semicolonBytes); err != nil {
+						return err
+					}
+				}
+				if (prev == js.IdentifierToken || prev == js.NumericToken || prev == js.PunctuatorToken || prev == js.StringToken || prev == js.RegexpToken) && (tt == js.IdentifierToken || tt == js.NumericToken || tt == js.PunctuatorToken || tt == js.RegexpToken) {
+					if lineTerminatorQueued && (prev != js.PunctuatorToken || prevLast == '}' || prevLast == ']' || prevLast == ')' || prevLast == '+' || prevLast == '-' || prevLast == '"' || prevLast == '\'') && (tt != js.PunctuatorToken || first == '{' || first == '[' || first == '(' || first == '+' || first == '-') {
+						if _, err := w.Write(newlineBytes); err != nil {
+							return err
+						}
+					} else if whitespaceQueued && (prev != js.StringToken && prev != js.PunctuatorToken && tt != js.PunctuatorToken || (prevLast == '+' || prevLast == '-') && first == prevLast) {
+						if _, err := w.Write(spaceBytes); err != nil {
+							return err
+						}
+					}
+				}
+				if _, err := w.Write(data); err != nil {
 					return err
 				}
-			}
-			if (prev == js.IdentifierToken || prev == js.NumericToken || prev == js.PunctuatorToken || prev == js.StringToken || prev == js.RegexpToken) && (tt == js.IdentifierToken || tt == js.NumericToken || tt == js.PunctuatorToken || tt == js.RegexpToken) {
-				if lineTerminatorQueued && (prev != js.PunctuatorToken || prevLast == '}' || prevLast == ']' || prevLast == ')' || prevLast == '+' || prevLast == '-' || prevLast == '"' || prevLast == '\'') && (tt != js.PunctuatorToken || first == '{' || first == '[' || first == '(' || first == '+' || first == '-') {
-					if _, err := w.Write(newlineBytes); err != nil {
-						return err
-					}
-				} else if whitespaceQueued && (prev != js.StringToken && prev != js.PunctuatorToken && tt != js.PunctuatorToken || (prevLast == '+' || prevLast == '-') && first == prevLast) {
-					if _, err := w.Write(spaceBytes); err != nil {
-						return err
-					}
-				}
-			}
-			if _, err := w.Write(text); err != nil {
-				return err
+				lineTerminatorQueued = false
+				whitespaceQueued = false
+				semicolonQueued = false
 			}
 			prev = tt
-			prevLast = text[len(text)-1]
-			lineTerminatorQueued = false
-			whitespaceQueued = false
-			semicolonQueued = false
+			prevLast = data[len(data)-1]
 		}
-		l.Free(n)
+		l.Free(len(data))
 	}
+	return nil
 }
