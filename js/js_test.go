@@ -551,6 +551,7 @@ func TestJS(t *testing.T) {
 		{`(new a().b).c(d)`, `(new a).b.c(d)`},
 		{`new a()`, `new a`},
 		{`new a()()`, `(new a)()`},
+		{`new a()?.()`, `(new a)?.()`},
 		{`new(a.b)instanceof c`, `new a.b instanceof c`},
 		{`new(a[b])instanceof c`, `new a[b]instanceof c`},
 		{"new(a`tmpl`)instanceof c", "new a`tmpl`instanceof c"},
@@ -559,7 +560,7 @@ func TestJS(t *testing.T) {
 		{"(a()`tmpl`).b(c)", "a()`tmpl`.b(c)"},
 		{`(a?.b).c(d)`, `(a?.b).c(d)`},
 		{`(a?.(c)).d(e)`, `(a?.(c)).d(e)`},
-		{`(a?.b.c).d`, `a?.b.c.d`},
+		{`(a?.b.c).d`, `(a?.b.c).d`},
 		{`class a extends (new b){}`, `class a extends new b{}`},
 		{`(new.target)`, `new.target`},
 		{`(import.meta)`, `import.meta`},
@@ -861,6 +862,7 @@ func TestJS(t *testing.T) {
 		{`var c="";for(let i=0;;);var d="";for(let i=0;;);`, `var d,c="";for(let i=0;;);d="";for(let i=0;;);`}, // #687
 		{"String.raw`\\b`", "String.raw`\\b`"}, // #701
 		{"if(true){const a=setInterval(()=>{clearInterval(a)},100)}", "{const a=setInterval(()=>{clearInterval(a)},100)}"}, // #867
+		{"(a?.b()).c", "(a?.b()).c"}, // #912
 	}
 
 	m := minify.New()

@@ -1132,7 +1132,6 @@ func (m *jsMinifier) minifyExpr(i js.IExpr, prec js.OpPrec) {
 			panic(fmt.Sprintf("bad type: %T!=(js.LiteralExpr,*js.Var)", expr.Y)) // should never happen
 		}
 
-		optionalLeft := false
 		if group, ok := expr.X.(*js.GroupExpr); ok {
 			if lit, ok := group.X.(*js.LiteralExpr); ok && (lit.TokenType == js.DecimalToken || lit.TokenType == js.IntegerToken) {
 				if lit.TokenType == js.DecimalToken {
@@ -1144,17 +1143,13 @@ func (m *jsMinifier) minifyExpr(i js.IExpr, prec js.OpPrec) {
 				m.write(dotBytes)
 				m.write(yData)
 				break
-			} else if dot, ok := group.X.(*js.DotExpr); ok {
-				optionalLeft = dot.Optional
-			} else if call, ok := group.X.(*js.CallExpr); ok {
-				optionalLeft = call.Optional
 			}
 		}
-		if js.OpMember <= prec || optionalLeft {
-			m.minifyExpr(expr.X, js.OpMember)
-		} else {
-			m.minifyExpr(expr.X, js.OpCall)
+		precInner := expr.Prec
+		if precInner == js.OpMember && prec < js.OpMember {
+			precInner = js.OpCall
 		}
+		m.minifyExpr(expr.X, precInner)
 		if expr.Optional {
 			m.write(questionBytes)
 		} else if last := m.prev[len(m.prev)-1]; '0' <= last && last <= '9' {
@@ -1177,8 +1172,8 @@ func (m *jsMinifier) minifyExpr(i js.IExpr, prec js.OpPrec) {
 		if cond, ok := expr.X.(*js.CondExpr); ok {
 			expr.X = m.optimizeCondExpr(cond, js.OpExpr)
 		}
-		precInside := exprPrec(expr.X)
-		if prec <= precInside || precInside == js.OpCoalesce && prec == js.OpBitOr {
+		precInner := exprPrec(expr.X)
+		if prec <= precInner || precInner == js.OpCoalesce && prec == js.OpBitOr {
 			m.minifyExpr(expr.X, prec)
 		} else {
 			parentInFor := m.inFor
@@ -1228,11 +1223,11 @@ func (m *jsMinifier) minifyExpr(i js.IExpr, prec js.OpPrec) {
 		m.inFor = parentInFor
 	case *js.TemplateExpr:
 		if expr.Tag != nil {
-			if prec < js.OpMember {
-				m.minifyExpr(expr.Tag, js.OpCall)
-			} else {
-				m.minifyExpr(expr.Tag, js.OpMember)
+			precInner := expr.Prec
+			if precInner == js.OpMember && prec < js.OpMember {
+				precInner = js.OpCall
 			}
+			m.minifyExpr(expr.Tag, precInner)
 			if expr.Optional {
 				m.write(optChainBytes)
 			}
@@ -1255,6 +1250,7 @@ func (m *jsMinifier) minifyExpr(i js.IExpr, prec js.OpPrec) {
 		m.inFor = parentInFor
 	case *js.NewExpr:
 		if expr.Args == nil && js.OpLHS < prec && prec != js.OpNew {
+			// new a() => (new a), when inside a Member, Call or OptChain expression
 			m.write(openNewBytes)
 			m.writeSpaceBeforeIdent()
 			m.minifyExpr(expr.X, js.OpNew)
@@ -1266,6 +1262,7 @@ func (m *jsMinifier) minifyExpr(i js.IExpr, prec js.OpPrec) {
 				m.minifyExpr(expr.X, js.OpMember)
 				m.minifyArguments(*expr.Args)
 			} else {
+				// new a() => new a
 				m.minifyExpr(expr.X, js.OpNew)
 			}
 		}
@@ -1391,7 +1388,11 @@ func (m *jsMinifier) minifyExpr(i js.IExpr, prec js.OpPrec) {
 				}
 			}
 		}
-		m.minifyExpr(expr.X, js.OpCall)
+		precInner := expr.Prec
+		if precInner == js.OpMember && prec < js.OpMember {
+			precInner = js.OpCall
+		}
+		m.minifyExpr(expr.X, precInner)
 		parentInFor := m.inFor
 		m.inFor = false
 		if expr.Optional {
@@ -1405,12 +1406,11 @@ func (m *jsMinifier) minifyExpr(i js.IExpr, prec js.OpPrec) {
 				m.write(notBytes)
 			}
 		}
-		if prec < js.OpMember {
-			m.minifyExpr(expr.X, js.OpCall)
-		} else {
-			m.minifyExpr(expr.X, js.OpMember)
+		precInner := expr.Prec
+		if precInner == js.OpMember && prec < js.OpMember {
+			precInner = js.OpCall
 		}
-
+		m.minifyExpr(expr.X, precInner)
 		if expr.Optional {
 			m.write(optChainBytes)
 		}
