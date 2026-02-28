@@ -862,6 +862,7 @@ func TestJS(t *testing.T) {
 		{`var c="";for(let i=0;;);var d="";for(let i=0;;);`, `var d,c="";for(let i=0;;);d="";for(let i=0;;);`}, // #687
 		{"String.raw`\\b`", "String.raw`\\b`"}, // #701
 		{"if(true){const a=setInterval(()=>{clearInterval(a)},100)}", "{const a=setInterval(()=>{clearInterval(a)},100)}"}, // #867
+		{"({a(key){if(x){b.push({key})}}})", "({a(key){x&&b.push({key})}})"},                                               // #910
 		{"(a?.b()).c", "(a?.b()).c"}, // #912
 	}
 
